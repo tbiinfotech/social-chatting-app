@@ -111,9 +111,28 @@ const updateProfileSchema = Joi.object({
         'string.base': 'Bio must be a string',
         'string.max': 'Bio cannot exceed 160 characters', // 160 is a common standard for short bios (e.g., Twitter)
     }),
-    contactNumber: Joi.string().pattern(/^[0-9]{10,15}$/).messages({
-        'string.base': 'Contact number must be a string',
-        'string.pattern.base': 'Contact number must be between 10 and 15 digits',
+    contactNumber: Joi.string().custom((value, helpers) => {
+        // Check if the contact number starts with a '+'
+        if (!value.startsWith('+')) {
+            return helpers.error('any.invalid'); // Not valid if it doesn't start with '+'
+        }
+
+        // Validate the overall length of the contact number
+        if (value.length < 10 || value.length > 15) {
+            return helpers.error('string.length'); // Error for length
+        }
+
+        // Validate the regex pattern
+        const pattern = /^\+\d{1,3}\d{7,14}$/;
+        if (!pattern.test(value)) {
+            return helpers.error('string.pattern.base'); // Error for invalid format
+        }
+
+        return value; // Return the value if all checks pass
+    }).messages({
+        'any.invalid': 'Please enter a contact number starting with a valid country code (e.g., +1 for the USA).',
+        'string.length': 'The contact number must be between 10 and 15 digits long, including the country code.',
+        'string.pattern.base': 'The contact number should follow the format +[country_code][number] (e.g., +441234567890).'
     }),
     hashTags: Joi.array().items(
         Joi.string().pattern(/^#[a-zA-Z0-9_]+$/).max(30).messages({
@@ -127,4 +146,4 @@ const updateProfileSchema = Joi.object({
 });
 
 
-module.exports = { userSchema, updateUserSchema, signInSchema, emailSchema, passwordSchema ,updateProfileSchema};
+module.exports = { userSchema, updateUserSchema, signInSchema, emailSchema, passwordSchema, updateProfileSchema };
