@@ -38,6 +38,7 @@ const userSchema = Joi.object({
         'any.only': 'Role must be either "admin" or "user"',
         'any.required': 'Role is required',
     }),
+
     // username: Joi.string().alphanum().min(3).max(30).optional().messages({
     //     'string.base': 'Username must be a string',
     //     'string.empty': 'Username cannot be empty',
@@ -82,7 +83,7 @@ const signInSchema = Joi.object({
     password: Joi.string().min(8).required().messages({
         'string.min': 'Password must be at least 8 characters long',
         'any.required': 'Password is required',
-    }),
+    })
 });
 
 const emailSchema = Joi.object({
