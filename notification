@@ -1,0 +1,157 @@
+const mongoose = require('mongoose');
+
+const notificationSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ['like', 'comment', 'follow'],
+    required: true,
+  },
+  recipient: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  sender: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  post: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Post',
+    required: function () {
+      return this.type === 'like' || this.type === 'comment';
+    },
+  },
+  message: {
+    type: String,
+  },
+  isRead: {
+    type: Boolean,
+    default: false,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+module.exports = mongoose.model('Notification', notificationSchema);
+
+
+const Notification = require('../models/Notification');
+const Post = require('../models/Post');
+
+const likePost = async (req, res) => {
+  const { postId } = req.body;
+  const post = await Post.findById(postId);
+
+  if (!post) {
+    return res.status(404).json({ message: 'Post not found' });
+  }
+
+  // Check if user already liked the post
+  const alreadyLiked = post.likes.includes(req.user._id);
+
+  if (!alreadyLiked) {
+    post.likes.push(req.user._id);
+    await post.save();
+
+    // Create a notification
+    await Notification.create({
+      type: 'like',
+      recipient: post.user, // Post author receives the notification
+      sender: req.user._id,
+      post: post._id,
+      message: `${req.user.username} liked your post.`,
+    });
+  }
+
+  res.json({ success: true });
+};
+
+
+const Notification = require('../models/Notification');
+
+const getNotifications = async (req, res) => {
+  const notifications = await Notification.find({ recipient: req.user._id })
+    .populate('sender', 'username profilePicture')
+    .populate('post', 'imageUrl')
+    .sort({ createdAt: -1 });
+
+  res.json(notifications);
+};
+
+
+const express = require('express');
+const { getNotifications } = require('../controllers/notificationController');
+const { authMiddleware } = require('../middleware/auth');
+
+const router = express.Router();
+
+router.get('/notifications', authMiddleware, getNotifications);
+
+module.exports = router;
+
+
+const markAsRead = async (req, res) => {
+  await Notification.updateMany(
+    { recipient: req.user._id, isRead: false },
+    { $set: { isRead: true } }
+  );
+
+  res.json({ success: true });
+};
+
+
+// Server-side (in your Node.js server)
+io.on('connection', (socket) => {
+  socket.on('likePost', async ({ recipientId, senderId, postId }) => {
+    // Notify the recipient
+    socket.to(recipientId).emit('newNotification', {
+      senderId,
+      postId,
+      message: `${senderId} liked your post.`,
+    });
+
+    // Optionally, store notification in DB as well
+    await Notification.create({
+      type: 'like',
+      recipient: recipientId,
+      sender: senderId,
+      post: postId,
+      message: 'liked your post.',
+    });
+  });
+});
+
+
+const mongoose = require('mongoose');
+
+const notificationSchema = new mongoose.Schema({
+  recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Refers to the user receiving the notification
+  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // The user who triggered the notification
+  type: { type: String, required: true }, // e.g., 'like', 'comment', 'follow', 'gift'
+  profile: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' }, // Reference to profile
+  story: { type: mongoose.Schema.Types.ObjectId, ref: 'Story' }, // Reference to story
+  message: { type: String }, // Optional notification message
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now },
+});
+
+module.exports = mongoose.model('Notification', notificationSchema);
+
+
+exports.getNotifications = async (req, res) => {
+    try {
+      const notifications = await Notification.find({ recipient: req.user.id })
+        .populate('profile', 'username profilePicture') // Corrected path to 'profile'
+        .populate('story', 'mediaUrl') // Corrected path to 'story'
+        .sort({ createdAt: -1 });
+  
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+  

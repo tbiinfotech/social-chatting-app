@@ -5,7 +5,7 @@ function authorize() {
   return [
     async (req, res, next) => {
 
-   
+
       console.log(req.headers)
 
       const tokenString = req.headers.authorization;
@@ -21,6 +21,7 @@ function authorize() {
       // console.log('authorize',token)
       try {
         let decoded = jwt.verify(token, process.env.jwt_token_key);
+        req.user = { id: decoded.user_id, role: decoded.role };
         const user = await User.findById(decoded.user_id);
         if (!user) {
           return res.json({

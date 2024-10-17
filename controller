@@ -1,0 +1,239 @@
+const mongoose = require('mongoose');
+
+const storySchema = new mongoose.Schema({
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  mediaType: {
+    type: String, // e.g., 'image', 'video'
+    required: true,
+  },
+  mediaUrl: {
+    type: String,
+    required: true,
+  },
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  expiryDate: {
+    type: Date,
+    default: Date.now,
+    expires: '24h', // Automatically deletes after 24 hours
+  },
+  promotionExpiry: Date, // If the story is promoted
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+module.exports = mongoose.model('Story', storySchema);
+
+const Story = require('../models/Story');
+const User = require('../models/User');
+
+// Create a new story
+exports.createStory = async (req, res) => {
+  try {
+    const { mediaType, mediaUrl, promotionExpiry } = req.body;
+
+    const newStory = new Story({
+      author: req.user.id, // Assuming you're using a middleware that populates req.user
+      mediaType,
+      mediaUrl,
+      promotionExpiry,
+    });
+
+    const savedStory = await newStory.save();
+    res.status(201).json({
+      success: true,
+      message: 'Story created successfully',
+      story: savedStory,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get all stories (explore feed)
+exports.getAllStories = async (req, res) => {
+  try {
+    const stories = await Story.find().populate('author', 'username');
+    res.status(200).json({
+      success: true,
+      stories,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get stories by a specific user
+exports.getUserStories = async (req, res) => {
+  try {
+    const stories = await Story.find({ author: req.params.userId }).populate('author', 'username');
+    res.status(200).json({
+      success: true,
+      stories,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Like a story
+exports.likeStory = async (req, res) => {
+  try {
+    const story = await Story.findById(req.params.storyId);
+    if (!story) {
+      return res.status(404).json({ success: false, message: 'Story not found' });
+    }
+
+    // Check if the user has already liked the story
+    if (story.likes.includes(req.user.id)) {
+      return res.status(400).json({ success: false, message: 'You already liked this story' });
+    }
+
+    story.likes.push(req.user.id);
+    await story.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Story liked successfully',
+      likes: story.likes.length,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Unlike a story
+exports.unlikeStory = async (req, res) => {
+  try {
+    const story = await Story.findById(req.params.storyId);
+    if (!story) {
+      return res.status(404).json({ success: false, message: 'Story not found' });
+    }
+
+    // Check if the user has not liked the story
+    if (!story.likes.includes(req.user.id)) {
+      return res.status(400).json({ success: false, message: 'You have not liked this story yet' });
+    }
+
+    story.likes = story.likes.filter((userId) => userId.toString() !== req.user.id);
+    await story.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Story unliked successfully',
+      likes: story.likes.length,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Promote a story (Admin or Premium feature)
+exports.promoteStory = async (req, res) => {
+  try {
+    const story = await Story.findById(req.params.storyId);
+    if (!story) {
+      return res.status(404).json({ success: false, message: 'Story not found' });
+    }
+
+    // Admins or premium users can promote a story
+    const isAdmin = req.user.role === 'admin';
+    const isPremium = req.user.isPremium;
+
+    if (!isAdmin && !isPremium) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to promote this story',
+      });
+    }
+
+    story.promotionExpiry = req.body.promotionExpiry;
+    await story.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Story promoted successfully',
+      promotionExpiry: story.promotionExpiry,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Delete a story (Author or Admin)
+exports.deleteStory = async (req, res) => {
+  try {
+    const story = await Story.findById(req.params.storyId);
+    if (!story) {
+      return res.status(404).json({ success: false, message: 'Story not found' });
+    }
+
+    // Allow deletion if the user is the author or an admin
+    if (story.author.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You cannot delete this story' });
+    }
+
+    await story.remove();
+
+    res.status(200).json({
+      success: true,
+      message: 'Story deleted successfully',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+router.post('/', isAuthenticated, storyController.createStory);
+
+// Get all stories (explore feed)
+router.get('/', isAuthenticated, storyController.getAllStories);
+
+// Get stories by a specific user
+router.get('/user/:userId', isAuthenticated, storyController.getUserStories);
+
+// Like a story (requires user authentication)
+router.post('/:storyId/like', isAuthenticated, storyController.likeStory);
+
+// Unlike a story (requires user authentication)
+router.post('/:storyId/unlike', isAuthenticated, storyController.unlikeStory);
+
+// Promote a story (requires user authentication and permission)
+router.post('/:storyId/promote', isAuthenticated, storyController.promoteStory);
+
+// Delete a story (requires user authentication and permission)
+router.delete('/:storyId', isAuthenticated, storyController.deleteStory);
+
+
+// add premium to user
+
+const jwt = require('jsonwebtoken');
+
+// Middleware to verify the JWT token and extract the user details
+const isAuthenticated = (req, res, next) => {
+  // Extract token from the Authorization header
+  const token = req.header('Authorization')?.split(' ')[1]; // e.g., Authorization: Bearer <token>
+
+  if (!token) {
+    return res.status(401).json({ message: 'No token provided, authorization denied' });
+  }
+
+  try {
+    // Verify the token and extract the payload (user_id and role)
+    const decoded = jwt.verify(token, process.env.jwt_token_key);
+
+    // Attach the user information to the req.user object
+    req.user = { id: decoded.user_id, role: decoded.role };
+
+    next(); // Pass control to the next middleware/route handler
+  } catch (err) {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+};
+
+module.exports = isAuthenticated;

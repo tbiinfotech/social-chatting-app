@@ -27,6 +27,8 @@ module.exports.getUser = async (req, res, next) => {
     });
   }
 };
+
+
 module.exports.getUserById = async (req, res) => {
   try {
 
@@ -112,7 +114,7 @@ module.exports.getUserProfileById = async (req, res) => {
           profilePicture: 1,
           contactNumber: 1,
           hashTags: 1,
-          country:1,
+          country: 1,
           name: "$userInfo.name",
           email: "$userInfo.email",
           gender: "$userInfo.gender",
@@ -147,7 +149,6 @@ module.exports.getUserProfileById = async (req, res) => {
     });
   }
 };
-
 
 
 module.exports.createUser = async (req, res, next) => {
@@ -374,12 +375,10 @@ module.exports.updateProfile = async (req, res, next) => {
   }
 };
 
-
 module.exports.searchUser = async (req, res) => {
   try {
     const { query } = req.query; // Search query (name, username, hashtag)
     const { age, gender, country } = req.body; // Filters
-
     console.log('query:', query);
 
     // Initialize the match conditions for the aggregation pipeline
@@ -480,6 +479,62 @@ module.exports.searchUser = async (req, res) => {
       status: 500,
       success: false,
       message: "An error occurred while searching for users.",
+    });
+  }
+};
+
+module.exports.changeLanguage = async (req, res, next) => {
+  console.log('changeLanguage#',req.user.id);
+  try {
+    const userId = req.user.id// Extract the user ID from the parameters
+    const { language } = req.body;
+
+    // Find the existing profile to check for the old profile picture
+    const profile = await Profile.findOne({ userId });
+
+    profile.language = language
+    await profile.save()
+
+    return res.json({
+      profile,
+      status: 200,
+      success: true,
+      message: "Language updated successfully.",
+    });
+  } catch (error) {
+    console.log("Error while updating user profile-------", error);
+    return res.status(500).json({
+      status: 500,
+      success: false,
+      message: "An error occurred while processing your request.",
+    });
+  }
+};
+
+module.exports.changeUsername = async (req, res, next) => {
+  console.log('changeUsername#',req.user.id);
+  try {
+    const userId = req.user.id// Extract the user ID from the parameters
+    const { username } = req.body;
+
+    // Find the existing profile to check for the old profile picture
+    const profile = await Profile.findOne({ userId });
+
+    profile.username = username
+    await profile.save()
+
+    return res.json({
+      profile,
+      status: 200,
+      success: true,
+      message: "username updated successfully.",
+    });
+  } catch (error) {
+    console.log("Error while updating user profile-------", error);
+    return res.status(500).json({
+      status: 500,
+      success: false,
+      message: "An error occurred while processing your request.",
     });
   }
 };

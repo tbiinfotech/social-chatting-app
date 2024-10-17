@@ -9,7 +9,6 @@ const { signInSchema, emailSchema, passwordSchema } = require('../../libs/schema
 const { SendEmail } = require('../../libs/Helper')
 
 module.exports.SignIn = async (req, res, next) => {
-
   try {
     let request_body = req.body;
     const { error } = signInSchema.validate(req.body)
